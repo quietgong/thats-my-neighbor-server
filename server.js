@@ -129,9 +129,9 @@ app.get("/api/locations", async (req, res) => {
             success: true,
             count: rows.length,
             data: rows.map((row) => ({
-                userId: row.id,
-                latitude: Number.parseFloat(row.latitude),
-                longitude: Number.parseFloat(row.longitude),
+                id: row.id,
+                lat: Number.parseFloat(row.latitude),
+                lng: Number.parseFloat(row.longitude),
                 timestamp: row.timestamp,
             })),
         })
