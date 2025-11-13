@@ -1,7 +1,7 @@
 const express = require("express")
 const mysql = require("mysql2/promise")
 const app = express()
-const PORT = 3333;
+const PORT = 3333
 
 // 미들웨어
 app.use(express.json())
@@ -21,28 +21,29 @@ const pool = mysql.createPool({
 async function initializeDatabase() {
     const connection = await pool.getConnection()
     try {
-        // users 테이블 생성
+        // users 테이블 생성 (username 없음)
         await connection.execute(`
             CREATE TABLE IF NOT EXISTS users (
-            id VARCHAR(36) PRIMARY KEY,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        `)
-
-        // locations 테이블 생성
-        await connection.execute(`
-            CREATE TABLE IF NOT EXISTS locations (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id VARCHAR(36) NOT NULL,
-            latitude DECIMAL(10, 8) NOT NULL,
-            longitude DECIMAL(11, 8) NOT NULL,
-            accuracy FLOAT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            INDEX idx_user_id (user_id),
-            INDEX idx_timestamp (timestamp)
+                id VARCHAR(36) PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         `)
+
+        // locations 테이블 생성 (accuracy 없음)
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS locations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                latitude DECIMAL(10, 8) NOT NULL,
+                longitude DECIMAL(11, 8) NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_user_id (user_id),
+                INDEX idx_timestamp (timestamp)
+            )
+        `)
+
         console.log("Database tables initialized successfully")
     } catch (error) {
         console.error("Database initialization error:", error)
@@ -53,11 +54,15 @@ async function initializeDatabase() {
 
 // 사용자 위치 업로드 (또는 업데이트)
 app.post("/api/locations", async (req, res) => {
-    const {userId, latitude, longitude, accuracy} = req.body
+    const { userId, latitude, longitude } = req.body
 
-    // 입력값 검증
-    if (!userId || !latitude || !longitude || typeof latitude !== "number" || typeof longitude !== "number") {
-        return res.status(400).json({error: "Invalid input parameters"})
+    // 숫자로 변환
+    const lat = Number(latitude)
+    const lng = Number(longitude)
+
+    // 입력값 검증 (0도도 허용, 문자열도 숫자로 변환해서 체크)
+    if (!userId || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ error: "Invalid input parameters" })
     }
 
     const connection = await pool.getConnection()
@@ -66,12 +71,15 @@ app.post("/api/locations", async (req, res) => {
         await connection.execute("INSERT IGNORE INTO users (id) VALUES (?)", [userId])
 
         // 위치 정보 저장 (최근 한 시간 이상 된 이전 위치는 삭제)
-        await connection.execute("DELETE FROM locations WHERE user_id = ? AND timestamp < DATE_SUB(NOW(), INTERVAL 1 HOUR)", [userId])
+        await connection.execute(
+            "DELETE FROM locations WHERE user_id = ? AND timestamp < DATE_SUB(NOW(), INTERVAL 1 HOUR)",
+            [userId],
+        )
 
         // 새 위치 저장
         const [result] = await connection.execute(
-            "INSERT INTO locations (user_id, latitude, longitude, accuracy) VALUES (?, ?, ?, ?)",
-            [userId, latitude, longitude, accuracy || null],
+            "INSERT INTO locations (user_id, latitude, longitude) VALUES (?, ?, ?)",
+            [userId, lat, lng],
         )
 
         res.json({
@@ -80,14 +88,13 @@ app.post("/api/locations", async (req, res) => {
             data: {
                 id: result.insertId,
                 userId,
-                latitude,
-                longitude,
-                accuracy,
+                latitude: lat,
+                longitude: lng,
             },
         })
     } catch (error) {
         console.error("Error updating location:", error)
-        res.status(500).json({error: "Failed to update location"})
+        res.status(500).json({ error: "Failed to update location" })
     } finally {
         connection.release()
     }
@@ -97,28 +104,22 @@ app.post("/api/locations", async (req, res) => {
 app.get("/api/locations", async (req, res) => {
     const connection = await pool.getConnection()
     try {
-        // 각 사용자의 가장 최신 위치만 조회
+        // 각 사용자의 최근 30분 이내 가장 최신 위치만 조회
         const [rows] = await connection.execute(`
-            SELECT u.id,
-                   u.username,
-                   l.latitude,
-                   l.longitude,
-                   l.accuracy,
-                   l.timestamp
-            FROM users u
-                     LEFT JOIN (SELECT user_id, latitude, longitude, accuracy, timestamp
-                                FROM locations
-                                WHERE (user_id
-                                    , timestamp) IN (
-                                    SELECT user_id
-                                    , MAX (timestamp)
-                                    FROM locations
-                                    WHERE timestamp
-                                    > DATE_SUB(NOW()
-                                    , INTERVAL 30 MINUTE)
-                                    GROUP BY user_id
-                                    )) l ON u.id = l.user_id
-            WHERE l.latitude IS NOT NULL
+            SELECT
+                l.user_id AS id,
+                l.latitude,
+                l.longitude,
+                l.timestamp
+            FROM locations l
+            JOIN (
+                SELECT user_id, MAX(timestamp) AS max_ts
+                FROM locations
+                WHERE timestamp > DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+                GROUP BY user_id
+            ) latest
+                ON l.user_id = latest.user_id
+               AND l.timestamp = latest.max_ts
             ORDER BY l.timestamp DESC
         `)
 
@@ -127,16 +128,14 @@ app.get("/api/locations", async (req, res) => {
             count: rows.length,
             data: rows.map((row) => ({
                 userId: row.id,
-                username: row.username,
                 latitude: Number.parseFloat(row.latitude),
                 longitude: Number.parseFloat(row.longitude),
-                accuracy: row.accuracy,
                 timestamp: row.timestamp,
             })),
         })
     } catch (error) {
         console.error("Error fetching locations:", error)
-        res.status(500).json({error: "Failed to fetch locations"})
+        res.status(500).json({ error: "Failed to fetch locations" })
     } finally {
         connection.release()
     }

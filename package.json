@@ -19,7 +19,6 @@
   "homepage": "https://github.com/quietgong/thats-my-neighbor-server#readme",
   "dependencies": {
     "express": "^5.1.0",
-    "mysql2": "^3.15.3",
-    "uuid": "^13.0.0"
+    "mysql2": "^3.15.3"
   }
 }
