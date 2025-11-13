@@ -1,10 +1,12 @@
 const express = require("express")
 const mysql = require("mysql2/promise")
+const cors = require("cors");
 const app = express()
 const PORT = 3333
 
 // 미들웨어
 app.use(express.json())
+app.use(cors())
 
 // MySQL 연결 풀
 const pool = mysql.createPool({
