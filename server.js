@@ -169,6 +169,27 @@ app.get("/api/locations/:userId", async (req, res) => {
   }
 });
 
+app.delete("/api/locations", async (req, res) => {
+  // locations 테이블 데이터 모두 삭제
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.execute("DELETE FROM locations");
+
+    res.json({
+      success: true,
+      message: "모든 위치 데이터가 삭제되었습니다.",
+    });
+  } catch (error) {
+    console.error("Error deleting locations:", error);
+    res.status(500).json({
+      success: false,
+      error: "위치 데이터 삭제에 실패했습니다.",
+    });
+  } finally {
+    connection.release();
+  }
+});
 
 // 서버 시작
 async function startServer() {
