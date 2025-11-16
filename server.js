@@ -103,45 +103,72 @@ app.post("/api/locations", async (req, res) => {
 })
 
 // 모든 사용자의 최신 위치 조회
-app.get("/api/locations", async (req, res) => {
-    const connection = await pool.getConnection()
-    try {
-        // 각 사용자의 최근 30분 이내 가장 최신 위치만 조회
-        const [rows] = await connection.execute(`
-            SELECT
-                l.user_id AS id,
-                l.latitude,
-                l.longitude,
-                l.timestamp
-            FROM locations l
-            JOIN (
-                SELECT user_id, MAX(timestamp) AS max_ts
-                FROM locations
-                WHERE timestamp > DATE_SUB(NOW(), INTERVAL 30 MINUTE)
-                GROUP BY user_id
-            ) latest
-                ON l.user_id = latest.user_id
-               AND l.timestamp = latest.max_ts
-            ORDER BY l.timestamp DESC
-        `)
+app.get("/api/locations/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const connection = await pool.getConnection();
 
-        res.json({
-            success: true,
-            count: rows.length,
-            data: rows.map((row) => ({
-                id: row.id,
-                lat: Number.parseFloat(row.latitude),
-                lng: Number.parseFloat(row.longitude),
-                timestamp: row.timestamp,
-            })),
-        })
-    } catch (error) {
-        console.error("Error fetching locations:", error)
-        res.status(500).json({ error: "Failed to fetch locations" })
-    } finally {
-        connection.release()
-    }
-})
+  try {
+    // 1) 나의 최신 위치 1개 (시간 제한 없음)
+    const [meRows] = await connection.execute(
+      `
+      SELECT
+        user_id AS id,
+        latitude,
+        longitude,
+        timestamp
+      FROM locations
+      WHERE user_id = ?
+      ORDER BY timestamp DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    // 2) 타인의 최근 30분 이내 "각 유저의 최신 위치" 중, 최신순 최대 10명
+    const [otherRows] = await connection.execute(
+      `
+      SELECT
+        l.user_id AS id,
+        l.latitude,
+        l.longitude,
+        l.timestamp
+      FROM locations l
+      JOIN (
+        SELECT user_id, MAX(timestamp) AS max_ts
+        FROM locations
+        WHERE timestamp > DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+          AND user_id <> ?
+        GROUP BY user_id
+      ) latest
+        ON l.user_id = latest.user_id
+       AND l.timestamp = latest.max_ts
+      ORDER BY l.timestamp DESC
+      LIMIT 10
+      `,
+      [userId]
+    );
+
+    // 3) 나 + 타인 최대 10명 합치기
+    const rows = [...meRows, ...otherRows];
+
+    res.json({
+      success: true,
+      count: rows.length,
+      data: rows.map((row) => ({
+        id: row.id,
+        lat: Number.parseFloat(row.latitude),
+        lng: Number.parseFloat(row.longitude),
+        timestamp: row.timestamp,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching locations:", error);
+    res.status(500).json({ error: "Failed to fetch locations" });
+  } finally {
+    connection.release();
+  }
+});
+
 
 // 서버 시작
 async function startServer() {
