@@ -65,7 +65,7 @@ app.post("/api/locations", async (req, res) => {
     const h = Number(heading)
 
     // 입력값 검증 (0도도 허용, 문자열도 숫자로 변환해서 체크)
-    if (!userId || !Number.isFinite(lat) || !Number.isFinite(lng) !!Number.isFinite(h)) {
+    if (!userId || !Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(h)) {
         return res.status(400).json({ error: "Invalid input parameters" })
     }
 
