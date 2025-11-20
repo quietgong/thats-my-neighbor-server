@@ -57,14 +57,15 @@ async function initializeDatabase() {
 
 // 사용자 위치 업로드 (또는 업데이트)
 app.post("/api/locations", async (req, res) => {
-    const { userId, latitude, longitude } = req.body
+    const { userId, latitude, longitude, heading } = req.body
 
     // 숫자로 변환
     const lat = Number(latitude)
     const lng = Number(longitude)
+    const h = Number(heading)
 
     // 입력값 검증 (0도도 허용, 문자열도 숫자로 변환해서 체크)
-    if (!userId || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (!userId || !Number.isFinite(lat) || !Number.isFinite(lng) !!Number.isFinite(h)) {
         return res.status(400).json({ error: "Invalid input parameters" })
     }
 
@@ -81,8 +82,8 @@ app.post("/api/locations", async (req, res) => {
 
         // 새 위치 저장
         const [result] = await connection.execute(
-            "INSERT INTO locations (user_id, latitude, longitude) VALUES (?, ?, ?)",
-            [userId, lat, lng],
+            "INSERT INTO locations (user_id, latitude, longitude) VALUES (?, ?, ?, ?)",
+            [userId, lat, lng, h],
         )
 
         res.json({
@@ -116,6 +117,7 @@ app.get("/api/locations/:userId", async (req, res) => {
         user_id AS id,
         latitude,
         longitude,
+          heading,
         timestamp
       FROM locations
       WHERE user_id = ?
@@ -132,6 +134,7 @@ app.get("/api/locations/:userId", async (req, res) => {
         l.user_id AS id,
         l.latitude,
         l.longitude,
+        l.heading,
         l.timestamp
       FROM locations l
       JOIN (
