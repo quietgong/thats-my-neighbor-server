@@ -82,7 +82,7 @@ app.post("/api/locations", async (req, res) => {
 
         // 새 위치 저장
         const [result] = await connection.execute(
-            "INSERT INTO locations (user_id, latitude, longitude, h) VALUES (?, ?, ?, ?)",
+            "INSERT INTO locations (user_id, latitude, longitude, heading) VALUES (?, ?, ?, ?)",
             [userId, lat, lng, h],
         )
 
