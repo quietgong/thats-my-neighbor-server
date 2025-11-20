@@ -39,6 +39,7 @@ async function initializeDatabase() {
                 user_id VARCHAR(36) NOT NULL,
                 latitude DECIMAL(10, 8) NOT NULL,
                 longitude DECIMAL(11, 8) NOT NULL,
+                heading DECIMAL(10, 8) NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 INDEX idx_user_id (user_id),
