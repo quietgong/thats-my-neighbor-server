@@ -127,7 +127,7 @@ app.get("/api/locations/:userId", async (req, res) => {
       JOIN (
          SELECT user_id, MAX(timestamp) AS max_ts
          FROM locations
-         WHERE timestamp > DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+         WHERE timestamp > DATE_SUB(NOW(), INTERVAL 1 MINUTE)
            AND user_id <> ?
          GROUP BY user_id
       ) t
